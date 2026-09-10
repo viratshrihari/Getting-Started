@@ -1,3 +1,2 @@
-item = str(input())
-print(item)
-
+y=str(input())
+print(str(y)[::-1])
