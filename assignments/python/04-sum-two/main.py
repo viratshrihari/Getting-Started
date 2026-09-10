@@ -1,1 +1,3 @@
-# Write your solution here.
+x = int(input())
+y = int(input())
+print(x + y)
