@@ -5,6 +5,9 @@ If GitHub asks, enable Actions in your fork.
 
 ```sh
 getting_started -py start next
+getting_started -py run 00-moo-chant-i
+getting_started -py submit 00-moo-chant-i
+getting_started -py start next
 getting_started -py run 01-echo
 getting_started -py submit 01-echo
 getting_started -py list
@@ -32,5 +35,8 @@ gh auth login
 ```
 
 Open a new terminal. Python/Java/C++ are needed locally only to run those solutions.
+
+To update an existing fork: **Sync fork → Update branch** on GitHub, then
+`git pull && make install` in your terminal. Commit your work before pulling.
 
 [Maintainer notes](grader/README.md)

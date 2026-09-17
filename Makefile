@@ -14,7 +14,7 @@ install: getting_started
 test: getting_started
 	sh tests/test.sh
 
-build/generate: tools/generate.c grader/catalog.h
+build/generate: tools/generate.c tools/new_problems.h grader/catalog.h
 	mkdir -p build
 	$(CC) $(CFLAGS) tools/generate.c -o $@
 

@@ -48,7 +48,10 @@ static const char *starter_source[] = {
     "import java.util.Scanner;\n\npublic class Main {\n    public static void main(String[] args) {\n        Scanner scanner = new Scanner(System.in);\n        // Write your solution here.\n    }\n}\n"
 };
 
+#include "new_problems.h"
+
 static void readme(FILE *file, int lang, int id) {
+    if (id == MOO_I || id >= COLLATZ) { new_readme(file, lang, id); return; }
     const Assignment *a = &assignments[id];
     fprintf(file, "# %s\n\n", a->name);
     if (id == ECHO) {
@@ -91,6 +94,7 @@ static int is_divisor(int id) {
 }
 
 static void fixtures(int id) {
+    if (id == MOO_I || id >= COLLATZ) { new_fixtures(id); return; }
     char path[512];
     snprintf(path, sizeof(path), "testcases/%s", assignments[id].name); directory(path);
     static const int sizes[TEST_COUNT] = {1, 1, 1, 2, 5, 8, 13, 21, 50, 100, 237, 999, 4096, 8191, 10000, 25000, 50000, 99999, 100000, 100000};

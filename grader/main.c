@@ -423,6 +423,39 @@ static void diagnostics(FILE *file) {
     if (!feof(file)) puts("\n...");
 }
 
+static int contains_text(FILE *file, const char *text) {
+    rewind_checked(file);
+    char line[4096];
+    while (fgets(line, sizeof(line), file)) if (strstr(line, text)) return 1;
+    return 0;
+}
+
+/* Text exercises keep spaces and line boundaries. Normalize CRLF only. */
+static char *read_text(FILE *file, size_t *length) {
+    char *text = malloc(OUTPUT_LIMIT + 1);
+    if (!text) fail("Out of memory.");
+    rewind_checked(file);
+    size_t n = fread(text, 1, OUTPUT_LIMIT + 1, file);
+    if (ferror(file) || n > OUTPUT_LIMIT) { free(text); return NULL; }
+    *length = 0;
+    for (size_t i = 0; i < n; i++) {
+        if (text[i] == '\r' && i + 1 < n && text[i + 1] == '\n') continue;
+        text[(*length)++] = text[i];
+    }
+    return text;
+}
+
+static int same_text(FILE *actual, FILE *expected) {
+    size_t a_length = 0, b_length = 0;
+    char *a = read_text(actual, &a_length), *b = read_text(expected, &b_length);
+    /* Answers have one display terminator; the solution may include or omit it. */
+    if (b && b_length && b[b_length - 1] == '\n') b_length--;
+    int equal = a && b && ((a_length == b_length && !memcmp(a, b, b_length))
+        || (a_length == b_length + 1 && a[a_length - 1] == '\n' && !memcmp(a, b, b_length)));
+    free(a); free(b);
+    return equal;
+}
+
 static int grade(int lang, int assignment, int sample) {
     char work[PATH_MAX], source[PATH_MAX], copied[PATH_MAX], executable[PATH_MAX];
     const char *tmp = getenv("TMPDIR");
@@ -433,7 +466,7 @@ static int grade(int lang, int assignment, int sample) {
     pathf(executable, "%s/solution", work);
     const char *verdict = "AC";
     int passed = 0, failed_test = 0;
-    int test_count = sample ? 1 : TEST_COUNT;
+    int test_count = sample ? (assignment == LONG_COW_I ? 3 : 1) : TEST_COUNT;
     FILE *out = temp_file(), *err = temp_file(), *empty = temp_file();
     if (!copy_file(source, copied)) { verdict = "CE"; puts("Missing solution file."); goto done; }
     char *c_compiler = available("gcc-16") ? "gcc-16" : "gcc";
@@ -441,7 +474,9 @@ static int grade(int lang, int assignment, int sample) {
     char *c_cmd[] = {c_compiler, "-std=c2y", "-O2", "-Wall", "-Wextra", copied, "-lm", "-o", executable, NULL};
     char *cpp_cmd[] = {cpp_compiler, "-std=gnu++26", "-O2", "-Wall", "-Wextra", copied, "-o", executable, NULL};
     char *java_cmd[] = {"javac", "--release", "26", "--enable-preview", "-encoding", "UTF-8", "-d", work, copied, NULL};
-    char *py_cmd[] = {"python3", "-m", "py_compile", copied, NULL};
+    char *python_exe = getenv("GETTING_STARTED_PYTHON");
+    if (!python_exe || !*python_exe) python_exe = "python3";
+    char *py_cmd[] = {python_exe, "-I", "-m", "py_compile", copied, NULL};
     char **compile[] = {py_cmd, c_cmd, cpp_cmd, java_cmd};
     Process result = run(compile[lang], work, fileno(empty), fileno(out), fileno(err), 30000, 1);
     if (result.code || result.tle || result.ole || interrupted) {
@@ -464,12 +499,13 @@ static int grade(int lang, int assignment, int sample) {
         fclose(out); fclose(err);
         out = temp_file(); err = temp_file();
         char *native[] = {executable, NULL};
-        char *python[] = {"python3", copied, NULL};
+        char *python[] = {python_exe, "-I", copied, NULL};
         char *java[] = {"java", "--enable-preview", "-Xmx256m", "-cp", work, "Main", NULL};
         char **command = lang == PYTHON ? python : lang == JAVA ? java : native;
         result = run(command, cwd, fileno(in), fileno(out), fileno(err), languages[lang].time_ms, 1);
         fclose(in);
         if (sample) {
+            if (test_count > 1) printf("Sample %d/%d:\n", tc, test_count);
             printf("Sample input:\n"); print_file(input, 200);
             printf("Expected output:\n"); print_file(answer, 200);
             printf("Your output:\n"); diagnostics(out); putchar('\n');
@@ -477,13 +513,17 @@ static int grade(int lang, int assignment, int sample) {
         if (result.tle) verdict = "TLE";
         else if (result.ole) verdict = "OLE";
         else if (result.code) verdict = "RE";
-        else if (!same_output(out, expected)) verdict = "WA";
+        else if (!(assignments[assignment].text_output ? same_text(out, expected) : same_output(out, expected))) verdict = "WA";
         fclose(expected);
         if (strcmp(verdict, "AC")) {
             failed_test = tc;
             if (!strcmp(verdict, "RE")) {
+                printf("Input: %s\n", input);
                 printf("Program exited with code %d.\n", result.code);
                 diagnostics(err);
+                if (lang == PYTHON && contains_text(err, "EOFError:")) {
+                    puts("Input ended. input() reads one line, not one number. Check the README's input format.");
+                }
             }
             if (!sample && !strcmp(verdict, "WA")) {
                 printf("Expected: "); print_file(answer, 200);
@@ -496,7 +536,10 @@ static int grade(int lang, int assignment, int sample) {
 done:
     if (interrupted) verdict = "INTERRUPTED";
     if (sample) {
-        if (!strcmp(verdict, "AC")) puts("Sample correct.");
+        if (!strcmp(verdict, "AC")) {
+            if (test_count > 1) printf("Samples correct (%d/%d).\n", passed, test_count);
+            else puts("Sample correct.");
+        }
         else printf("Sample failed: %s.\n", verdict);
     } else {
         printf("%s %s/%s — %d/%d tests", verdict, languages[lang].name, assignments[assignment].name, passed, test_count);
